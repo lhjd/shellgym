@@ -1,0 +1,9 @@
+id: sockets-and-network-services
+title: Sockets and Network Services
+description: >
+  Find out what a Linux host is listening on, and then talk to it. Read
+  listening and connected sockets with ss (and its predecessor netstat),
+  query an HTTP service with curl, open raw TCP and UDP connections by
+  hand with nc, and finish on the everyday triage question: is it up, on
+  which port, and who owns it?
+shellUser: laborant

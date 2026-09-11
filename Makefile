@@ -13,7 +13,7 @@ vet:
 	$(GO) vet ./...
 
 validate: build
-	./$(BIN) validate --path paths/sample-linux-101
+	@for p in paths/*/; do ./$(BIN) validate --path "$$p" || exit 1; done
 
 # Run the daemon against the reference path (playground use only).
 run: build
