@@ -89,15 +89,19 @@ init:
       for i in 1 2 3 4 5; do
         systemctl stop "stockroom-probe-$i.service" 2>/dev/null || true
       done
-      pkill -f 'stockroom-serve[r] ' 2>/dev/null || true
-      pkill -f 'archive-syn[c] ' 2>/dev/null || true
-      pkill -f 'stockroom-prob[e] ' 2>/dev/null || true
+      pkill -u "$GYM_USER" -f 'stockroom-serve[r] ' 2>/dev/null || true
+      pkill -u "$GYM_USER" -f 'archive-syn[c] ' 2>/dev/null || true
+      pkill -u "$GYM_USER" -f 'stockroom-prob[e] ' 2>/dev/null || true
       sleep 0.5
       rm -f "$GYM_USER_HOME/status.json"
       systemd-run --collect --quiet --unit=stockroom --uid="$GYM_USER" --setenv=STOCKROOM_BUILD="$BUILD" \
-        /opt/stockroom/stockroom-server "$PORT" 0.0.0.0
+        /opt/stockroom/stockroom-server "$PORT" 0.0.0.0 || {
+        echo "systemd-run refused to start stockroom" >&2
+        exit 1
+      }
       wait_port --timeout 20 "$PORT" || {
-        echo "stockroom did not start on port $PORT" >&2
+        echo "stockroom did not come up on port $PORT" >&2
+        systemctl status stockroom --no-pager 2>&1 | tail -10 >&2
         exit 1
       }
 tasks:

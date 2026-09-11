@@ -90,21 +90,29 @@ init:
       for i in 1 2 3 4 5; do
         systemctl stop "stockroom-probe-$i.service" 2>/dev/null || true
       done
-      pkill -f 'stockroom-serve[r] ' 2>/dev/null || true
-      pkill -f 'archive-syn[c] ' 2>/dev/null || true
-      pkill -f 'stockroom-prob[e] ' 2>/dev/null || true
+      pkill -u "$GYM_USER" -f 'stockroom-serve[r] ' 2>/dev/null || true
+      pkill -u "$GYM_USER" -f 'archive-syn[c] ' 2>/dev/null || true
+      pkill -u "$GYM_USER" -f 'stockroom-prob[e] ' 2>/dev/null || true
       sleep 0.5
       rm -f "$GYM_USER_HOME/public-port.txt"
       systemd-run --collect --quiet --unit=stockroom --uid="$GYM_USER" --setenv=STOCKROOM_BUILD="$BUILD" \
-        /opt/stockroom/stockroom-server "$PUBLIC_PORT" 0.0.0.0
+        /opt/stockroom/stockroom-server "$PUBLIC_PORT" 0.0.0.0 || {
+        echo "systemd-run refused to start stockroom" >&2
+        exit 1
+      }
       wait_port --timeout 20 "$PUBLIC_PORT" || {
-        echo "stockroom did not start on port $PUBLIC_PORT" >&2
+        echo "stockroom did not come up on port $PUBLIC_PORT" >&2
+        systemctl status stockroom --no-pager 2>&1 | tail -10 >&2
         exit 1
       }
       systemd-run --collect --quiet --unit=stockroom-admin --uid="$GYM_USER" --setenv=STOCKROOM_BUILD="$BUILD" \
-        /opt/stockroom/stockroom-server "$LOCAL_PORT" 127.0.0.1
+        /opt/stockroom/stockroom-server "$LOCAL_PORT" 127.0.0.1 || {
+        echo "systemd-run refused to start stockroom-admin" >&2
+        exit 1
+      }
       wait_port --timeout 20 "$LOCAL_PORT" || {
-        echo "stockroom-admin did not start on port $LOCAL_PORT" >&2
+        echo "stockroom-admin did not come up on port $LOCAL_PORT" >&2
+        systemctl status stockroom-admin --no-pager 2>&1 | tail -10 >&2
         exit 1
       }
 tasks:

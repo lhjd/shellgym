@@ -30,14 +30,18 @@ init:
       for i in 1 2 3 4 5; do
         systemctl stop "stockroom-probe-$i.service" 2>/dev/null || true
       done
-      pkill -f 'stockroom-serve[r] ' 2>/dev/null || true
-      pkill -f 'archive-syn[c] ' 2>/dev/null || true
-      pkill -f 'stockroom-prob[e] ' 2>/dev/null || true
+      pkill -u "$GYM_USER" -f 'stockroom-serve[r] ' 2>/dev/null || true
+      pkill -u "$GYM_USER" -f 'archive-syn[c] ' 2>/dev/null || true
+      pkill -u "$GYM_USER" -f 'stockroom-prob[e] ' 2>/dev/null || true
       sleep 0.5
       systemd-run --collect --quiet --unit=archive-sync --uid="$GYM_USER" \
-        /opt/stockroom/archive-sync "$PORT"
+        /opt/stockroom/archive-sync "$PORT" || {
+        echo "systemd-run refused to start archive-sync" >&2
+        exit 1
+      }
       wait_port --timeout 20 "$PORT" || {
-        echo "archive-sync did not start on port $PORT" >&2
+        echo "archive-sync did not come up on port $PORT" >&2
+        systemctl status archive-sync --no-pager 2>&1 | tail -10 >&2
         exit 1
       }
 tasks:
