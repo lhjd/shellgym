@@ -6,10 +6,10 @@ vars:
 init:
   - name: install_agents
     run: |
-      install -d -m 0755 /opt/stockroom
-      cat > /opt/stockroom/archive-sync <<'PY'
+      install -d -m 0755 /opt/archive-sync
+      cat > /opt/archive-sync/archive-sync <<'PY'
       #!/usr/bin/env python3
-      """Archive sync agent - accepts connections and closes them immediately."""
+      """archive-sync - accepts connections and closes them without a word."""
       import socket
       import sys
 
@@ -21,21 +21,21 @@ init:
           conn, _ = srv.accept()
           conn.close()
       PY
-      chmod 0755 /opt/stockroom/archive-sync
+      chmod 0755 /opt/archive-sync/archive-sync
   - name: start_squatter
     run: |
-      for u in stockroom stockroom-import stockroom-admin archive-sync archive-sync-2; do
+      for u in notes-api notes-api-import notes-api-admin archive-sync archive-sync-2; do
         systemctl stop "$u.service" 2>/dev/null || true
       done
       for i in 1 2 3 4 5; do
-        systemctl stop "stockroom-probe-$i.service" 2>/dev/null || true
+        systemctl stop "api-probe-$i.service" 2>/dev/null || true
       done
-      pkill -u "$GYM_USER" -f 'stockroom-serve[r] ' 2>/dev/null || true
+      pkill -u "$GYM_USER" -f 'notes-ap[i] ' 2>/dev/null || true
       pkill -u "$GYM_USER" -f 'archive-syn[c] ' 2>/dev/null || true
-      pkill -u "$GYM_USER" -f 'stockroom-prob[e] ' 2>/dev/null || true
+      pkill -u "$GYM_USER" -f 'api-prob[e] ' 2>/dev/null || true
       sleep 0.5
       systemd-run --collect --quiet --unit=archive-sync --uid="$GYM_USER" \
-        /opt/stockroom/archive-sync "$PORT" || {
+        /opt/archive-sync/archive-sync "$PORT" || {
         echo "systemd-run refused to start archive-sync" >&2
         exit 1
       }
@@ -58,8 +58,8 @@ tasks:
       kill $(ss -tlnpH sport = :$PORT | grep -o 'pid=[0-9]*' | cut -d= -f2)
 ---
 
-A deploy of Stockroom Server has just failed with the message every
-operator has read at least once:
+A deploy of the `notes-api` service has just failed with the message
+every operator has read at least once:
 
 ```
 OSError: [Errno 98] Address already in use

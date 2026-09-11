@@ -11,7 +11,7 @@ The tool for reading it is `ss` (socket statistics), part of the
 retired predecessor `netstat` makes a guest appearance too, because you
 will keep meeting it in older runbooks.
 
-Your practice target throughout this path is **Stockroom Server**: a
-small HTTP service that serves inventory records over TCP. Every rep
-tells you everything about it that you need - there is nothing to carry
-over from one rep to the next.
+Your practice target throughout this path is `notes-api`: a deliberately
+small HTTP service that stores short text notes. Every rep installs and
+starts it for you and tells you everything about it that you need -
+there is nothing to carry over from one rep to the next.

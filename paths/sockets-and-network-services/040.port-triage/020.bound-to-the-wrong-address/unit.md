@@ -5,12 +5,12 @@ vars:
   PORT: { pick: ["9381", "9382", "9383"] }
   BUILD: { shell: "head -c4 /dev/urandom | od -An -tx1 | tr -d ' \\n'" }
 init:
-  - name: install_stockroom
+  - name: install_service
     run: |
-      install -d -m 0755 /opt/stockroom
-      cat > /opt/stockroom/stockroom-server <<'PY'
+      install -d -m 0755 /opt/notes-api
+      cat > /opt/notes-api/notes-api <<'PY'
       #!/usr/bin/env python3
-      """Stockroom Server - a small inventory HTTP API used as a practice target."""
+      """notes-api - a small HTTP service that stores short text notes."""
       import json
       import os
       import sys
@@ -18,18 +18,18 @@ init:
 
       PORT = int(sys.argv[1])
       BIND = sys.argv[2] if len(sys.argv) > 2 else "0.0.0.0"
-      BUILD = os.environ.get("STOCKROOM_BUILD", "dev")
-      INBOX = os.environ.get("STOCKROOM_INBOX", "/var/lib/stockroom/received.log")
+      BUILD = os.environ.get("NOTES_BUILD", "dev")
+      INBOX = os.environ.get("NOTES_INBOX", "/var/lib/notes-api/received.log")
 
-      ITEMS = [
-          {"asset": "A-1041", "item": "shelf bracket", "location": "aisle-3", "qty": 12},
-          {"asset": "A-2277", "item": "pallet jack", "location": "dock-1", "qty": 2},
-          {"asset": "A-3390", "item": "label roll", "location": "aisle-7", "qty": 48},
+      NOTES = [
+          {"id": "n-1041", "text": "rotate the backup keys", "author": "ana"},
+          {"id": "n-2277", "text": "restart the ingest worker", "author": "bo"},
+          {"id": "n-3390", "text": "archive last quarter of logs", "author": "chen"},
       ]
 
 
       class Handler(BaseHTTPRequestHandler):
-          server_version = "StockroomServer/1.4"
+          server_version = "NotesAPI/1.4"
           sys_version = ""
 
           def reply(self, code, payload, headers=()):
@@ -46,10 +46,10 @@ init:
           def do_GET(self):
               if self.path == "/status":
                   self.reply(200, {"status": "ok", "build": BUILD})
-              elif self.path == "/items":
-                  self.reply(301, {"moved": "/api/items"}, [("Location", "/api/items")])
-              elif self.path == "/api/items":
-                  self.reply(200, {"items": ITEMS})
+              elif self.path == "/notes":
+                  self.reply(301, {"moved": "/api/notes"}, [("Location", "/api/notes")])
+              elif self.path == "/api/notes":
+                  self.reply(200, {"notes": NOTES})
               else:
                   self.reply(404, {"error": "no such endpoint"})
 
@@ -58,18 +58,18 @@ init:
           def do_POST(self):
               length = int(self.headers.get("Content-Length") or 0)
               raw = self.rfile.read(length).decode("utf-8", "replace")
-              if self.path != "/api/items":
+              if self.path != "/api/notes":
                   self.reply(404, {"error": "no such endpoint"})
                   return
               try:
-                  asset = str(json.loads(raw)["asset"])
+                  note_id = str(json.loads(raw)["id"])
               except Exception:
-                  self.reply(400, {"error": "expected a JSON body with an asset field"})
+                  self.reply(400, {"error": "expected a JSON body with an id field"})
                   return
               os.makedirs(os.path.dirname(INBOX), exist_ok=True)
               with open(INBOX, "a") as fh:
-                  fh.write(asset + "\n")
-              self.reply(201, {"accepted": asset})
+                  fh.write(note_id + "\n")
+              self.reply(201, {"accepted": note_id})
 
           def log_message(self, *args):
               pass
@@ -78,29 +78,29 @@ init:
       ThreadingHTTPServer.allow_reuse_address = True
       ThreadingHTTPServer((BIND, PORT), Handler).serve_forever()
       PY
-      chmod 0755 /opt/stockroom/stockroom-server
-      mkdir -p /var/lib/stockroom
-      chown "$GYM_USER" /var/lib/stockroom
-  - name: start_stockroom
+      chmod 0755 /opt/notes-api/notes-api
+      mkdir -p /var/lib/notes-api
+      chown "$GYM_USER" /var/lib/notes-api
+  - name: start_service
     run: |
-      for u in stockroom stockroom-import stockroom-admin archive-sync archive-sync-2; do
+      for u in notes-api notes-api-import notes-api-admin archive-sync archive-sync-2; do
         systemctl stop "$u.service" 2>/dev/null || true
       done
       for i in 1 2 3 4 5; do
-        systemctl stop "stockroom-probe-$i.service" 2>/dev/null || true
+        systemctl stop "api-probe-$i.service" 2>/dev/null || true
       done
-      pkill -u "$GYM_USER" -f 'stockroom-serve[r] ' 2>/dev/null || true
+      pkill -u "$GYM_USER" -f 'notes-ap[i] ' 2>/dev/null || true
       pkill -u "$GYM_USER" -f 'archive-syn[c] ' 2>/dev/null || true
-      pkill -u "$GYM_USER" -f 'stockroom-prob[e] ' 2>/dev/null || true
+      pkill -u "$GYM_USER" -f 'api-prob[e] ' 2>/dev/null || true
       sleep 0.5
-      systemd-run --collect --quiet --unit=stockroom --uid="$GYM_USER" --setenv=STOCKROOM_BUILD="$BUILD" \
-        /opt/stockroom/stockroom-server "$PORT" 127.0.0.1 || {
-        echo "systemd-run refused to start stockroom" >&2
+      systemd-run --collect --quiet --unit=notes-api --uid="$GYM_USER" --setenv=NOTES_BUILD="$BUILD" \
+        /opt/notes-api/notes-api "$PORT" 127.0.0.1 || {
+        echo "systemd-run refused to start notes-api" >&2
         exit 1
       }
       wait_port --timeout 20 "$PORT" || {
-        echo "stockroom did not come up on port $PORT" >&2
-        systemctl status stockroom --no-pager 2>&1 | tail -10 >&2
+        echo "notes-api did not come up on port $PORT" >&2
+        systemctl status notes-api --no-pager 2>&1 | tail -10 >&2
         exit 1
       }
 tasks:
@@ -121,13 +121,13 @@ tasks:
       echo "Find the running server first (its command line ends in ${PORT} 127.0.0.1), stop it, then start it again with 0.0.0.0 as the second argument."
     solve: |
       ss -tlnp sport = :$PORT
-      pkill -f "stockroom-server $PORT"
+      pkill -f "notes-api $PORT"
       #!wait 1
-      /opt/stockroom/stockroom-server $PORT 0.0.0.0 &
+      /opt/notes-api/notes-api $PORT 0.0.0.0 &
       #!wait 3
 ---
 
-Stockroom Server is up on port `${PORT}` and answers perfectly from this
+`notes-api` is up on port `${PORT}` and answers perfectly from this
 machine - and not at all from anywhere else. You met the reason in the
 first module: it is bound to `127.0.0.1`, so the socket only ever
 accepts connections that never left the host.
@@ -135,7 +135,7 @@ accepts connections that never left the host.
 The server takes the address to bind as its second argument:
 
 ```
-/opt/stockroom/stockroom-server <port> <address>
+/opt/notes-api/notes-api <port> <address>
 ```
 
 Get it listening on port `${PORT}` on **all** addresses. Two things have
